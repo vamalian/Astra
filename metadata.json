@@ -1,0 +1,6 @@
+{
+  "name": "ASTRA AI",
+  "description": "Futuristic Android tablet AI assistant with animated multi-ring ARC Reactor, Gemini AI intelligence, native voice system, and ASTRA GUARD security.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
