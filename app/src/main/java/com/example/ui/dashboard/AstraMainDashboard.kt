@@ -85,6 +85,15 @@ fun AstraMainDashboard(
     installedApps: List<InstalledApp>,
     isListening: Boolean,
     isSpeaking: Boolean,
+    liveMovementDelta: Float = 0f,
+    liveAccelX: Float = 0f,
+    liveAccelY: Float = 0f,
+    liveAccelZ: Float = 9.8f,
+    verifiedTouchCount: Int = 0,
+    lastVerifiedTouchTime: String? = null,
+    lastVerifiedMovementTime: String? = null,
+    isMaxLoudAlarmEnabled: Boolean = true,
+    onToggleMaxLoudAlarm: (Boolean) -> Unit = {},
     onSendMessage: (String) -> Unit,
     onStartListening: () -> Unit,
     onStopListening: () -> Unit,
@@ -117,14 +126,12 @@ fun AstraMainDashboard(
         modifier = modifier
             .fillMaxSize()
             .background(ObsidianBlack)
-            .pointerInput(guardState) {
-                if (guardState == GuardState.ACTIVE) {
-                    awaitPointerEventScope {
-                        while (true) {
-                            val event = awaitPointerEvent()
-                            if (event.type == PointerEventType.Press) {
-                                onScreenTouched()
-                            }
+            .pointerInput(Unit) {
+                awaitPointerEventScope {
+                    while (true) {
+                        val event = awaitPointerEvent()
+                        if (event.type == PointerEventType.Press) {
+                            onScreenTouched()
                         }
                     }
                 }
@@ -243,6 +250,16 @@ fun AstraMainDashboard(
                                         armingCountdown = armingCountdown,
                                         activeAlertMessage = activeAlertMessage,
                                         alerts = alerts,
+                                        liveMovementDelta = liveMovementDelta,
+                                        liveAccelX = liveAccelX,
+                                        liveAccelY = liveAccelY,
+                                        liveAccelZ = liveAccelZ,
+                                        verifiedTouchCount = verifiedTouchCount,
+                                        lastVerifiedTouchTime = lastVerifiedTouchTime,
+                                        lastVerifiedMovementTime = lastVerifiedMovementTime,
+                                        isMaxLoudAlarmEnabled = isMaxLoudAlarmEnabled,
+                                        onToggleMaxLoudAlarm = onToggleMaxLoudAlarm,
+                                        onTouchVerificationTap = onScreenTouched,
                                         onStartArming = onStartArming,
                                         onCancelArming = onCancelArming,
                                         onDisarm = onDisarm,
@@ -317,6 +334,16 @@ fun AstraMainDashboard(
                                     armingCountdown = armingCountdown,
                                     activeAlertMessage = activeAlertMessage,
                                     alerts = alerts,
+                                    liveMovementDelta = liveMovementDelta,
+                                    liveAccelX = liveAccelX,
+                                    liveAccelY = liveAccelY,
+                                    liveAccelZ = liveAccelZ,
+                                    verifiedTouchCount = verifiedTouchCount,
+                                    lastVerifiedTouchTime = lastVerifiedTouchTime,
+                                    lastVerifiedMovementTime = lastVerifiedMovementTime,
+                                    isMaxLoudAlarmEnabled = isMaxLoudAlarmEnabled,
+                                    onToggleMaxLoudAlarm = onToggleMaxLoudAlarm,
+                                    onTouchVerificationTap = onScreenTouched,
                                     onStartArming = onStartArming,
                                     onCancelArming = onCancelArming,
                                     onDisarm = onDisarm,

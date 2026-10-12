@@ -25,6 +25,9 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import kotlin.math.sqrt
 
 class AstraGuardManager(
@@ -37,6 +40,7 @@ class AstraGuardManager(
 
     private val sensorManager = context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
     private val accelerometer: Sensor? = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
+    private val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
 
     private val _guardState = MutableStateFlow(GuardState.OFF)
     val guardState: StateFlow<GuardState> = _guardState.asStateFlow()
@@ -59,11 +63,36 @@ class AstraGuardManager(
     private val _isVibrationEnabled = MutableStateFlow(true)
     val isVibrationEnabled: StateFlow<Boolean> = _isVibrationEnabled.asStateFlow()
 
+    private val _isMaxLoudAlarmEnabled = MutableStateFlow(true)
+    val isMaxLoudAlarmEnabled: StateFlow<Boolean> = _isMaxLoudAlarmEnabled.asStateFlow()
+
     private val _activeAlertMessage = MutableStateFlow<String?>(null)
     val activeAlertMessage: StateFlow<String?> = _activeAlertMessage.asStateFlow()
 
     private val _activeAlertType = MutableStateFlow<String?>(null)
     val activeAlertType: StateFlow<String?> = _activeAlertType.asStateFlow()
+
+    // Live verification telemetry
+    private val _liveAccelX = MutableStateFlow(0f)
+    val liveAccelX: StateFlow<Float> = _liveAccelX.asStateFlow()
+
+    private val _liveAccelY = MutableStateFlow(0f)
+    val liveAccelY: StateFlow<Float> = _liveAccelY.asStateFlow()
+
+    private val _liveAccelZ = MutableStateFlow(9.8f)
+    val liveAccelZ: StateFlow<Float> = _liveAccelZ.asStateFlow()
+
+    private val _liveMovementDelta = MutableStateFlow(0f)
+    val liveMovementDelta: StateFlow<Float> = _liveMovementDelta.asStateFlow()
+
+    private val _verifiedTouchCount = MutableStateFlow(0)
+    val verifiedTouchCount: StateFlow<Int> = _verifiedTouchCount.asStateFlow()
+
+    private val _lastVerifiedTouchTime = MutableStateFlow<String?>("Awaiting touch...")
+    val lastVerifiedTouchTime: StateFlow<String?> = _lastVerifiedTouchTime.asStateFlow()
+
+    private val _lastVerifiedMovementTime = MutableStateFlow<String?>("Awaiting movement...")
+    val lastVerifiedMovementTime: StateFlow<String?> = _lastVerifiedMovementTime.asStateFlow()
 
     private var countdownJob: Job? = null
     private var alarmToneGenerator: ToneGenerator? = null
@@ -77,6 +106,14 @@ class AstraGuardManager(
 
     private var lastAlertTimestamp = 0L
     private val alertCooldownMs = 3000L // 3 seconds cooldown between duplicate triggers
+    private val timeFormatter = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
+
+    init {
+        // Register sensor for continuous telemetry and movement verification
+        accelerometer?.let {
+            sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_UI)
+        }
+    }
 
     fun setGuardMode(mode: GuardMode) {
         _guardMode.value = mode
@@ -98,6 +135,10 @@ class AstraGuardManager(
         _isVibrationEnabled.value = enabled
     }
 
+    fun setMaxLoudAlarmEnabled(enabled: Boolean) {
+        _isMaxLoudAlarmEnabled.value = enabled
+    }
+
     fun startArmingSequence(mode: GuardMode = _guardMode.value, durationSeconds: Int = _armingSeconds.value) {
         if (_guardState.value == GuardState.ACTIVE || _guardState.value == GuardState.ARMING) return
 
@@ -110,7 +151,7 @@ class AstraGuardManager(
         countdownJob = scope.launch {
             for (sec in durationSeconds downTo 1) {
                 _countdownRemaining.value = sec
-                playBeep(ToneGenerator.TONE_PROP_BEEP, 100)
+                playBeep(ToneGenerator.TONE_PROP_BEEP, 120)
                 delay(1000L)
             }
             _countdownRemaining.value = 0
@@ -129,11 +170,12 @@ class AstraGuardManager(
     private fun activateGuard() {
         hasBaseline = false
         _guardState.value = GuardState.ACTIVE
-        playBeep(ToneGenerator.TONE_PROP_PROMPT, 250)
+        playBeep(ToneGenerator.TONE_PROP_PROMPT, 300)
 
-        // Register sensor if mode includes MOVEMENT
+        // Switch to faster sensor sampling for security responsiveness
         if (_guardMode.value == GuardMode.MOVEMENT || _guardMode.value == GuardMode.BOTH) {
             accelerometer?.let {
+                sensorManager.unregisterListener(this)
                 sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_GAME)
             }
         }
@@ -145,9 +187,12 @@ class AstraGuardManager(
         _guardState.value = GuardState.OFF
         _activeAlertMessage.value = null
         _activeAlertType.value = null
-        try {
+
+        // Return to standard UI sensor sampling
+        accelerometer?.let {
             sensorManager.unregisterListener(this)
-        } catch (_: Exception) {}
+            sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_UI)
+        }
         onAlertDismissed()
     }
 
@@ -164,6 +209,11 @@ class AstraGuardManager(
     }
 
     fun onScreenTouched() {
+        // Record touch verification for live testing monitor
+        _verifiedTouchCount.value = _verifiedTouchCount.value + 1
+        _lastVerifiedTouchTime.value = "${timeFormatter.format(Date())} (Touch #${_verifiedTouchCount.value})"
+
+        // If Guard is actively armed, trigger security alert
         if (_guardState.value != GuardState.ACTIVE) return
         if (_guardMode.value != GuardMode.TOUCH && _guardMode.value != GuardMode.BOTH) return
 
@@ -173,18 +223,20 @@ class AstraGuardManager(
 
         triggerAlert(
             type = "TOUCH BREACH",
-            message = "ASTRA GUARD ALERT: Unexpected touch detected."
+            message = "ASTRA GUARD ALERT: Unexpected touch detected on protected screen."
         )
     }
 
     override fun onSensorChanged(event: SensorEvent?) {
-        if (event == null || _guardState.value != GuardState.ACTIVE) return
-        if (_guardMode.value != GuardMode.MOVEMENT && _guardMode.value != GuardMode.BOTH) return
-        if (event.sensor.type != Sensor.TYPE_ACCELEROMETER) return
+        if (event == null || event.sensor.type != Sensor.TYPE_ACCELEROMETER) return
 
         val x = event.values[0]
         val y = event.values[1]
         val z = event.values[2]
+
+        _liveAccelX.value = x
+        _liveAccelY.value = y
+        _liveAccelZ.value = z
 
         if (!hasBaseline) {
             baselineX = x
@@ -199,20 +251,29 @@ class AstraGuardManager(
         val dz = z - baselineZ
         val deltaAccel = sqrt(dx * dx + dy * dy + dz * dz)
 
-        // Exponential smoothing for baseline drift
+        _liveMovementDelta.value = deltaAccel
+
+        // Exponential smoothing for resting baseline drift
         baselineX = baselineX * 0.95f + x * 0.05f
         baselineY = baselineY * 0.95f + y * 0.05f
         baselineZ = baselineZ * 0.95f + z * 0.05f
 
-        if (deltaAccel > _sensitivity.value.threshold) {
-            val now = System.currentTimeMillis()
-            if (now - lastAlertTimestamp < alertCooldownMs) return
-            lastAlertTimestamp = now
+        val threshold = _sensitivity.value.threshold
+        if (deltaAccel > threshold) {
+            _lastVerifiedMovementTime.value = "${timeFormatter.format(Date())} (${String.format(Locale.US, "%.2f", deltaAccel)} m/s²)"
 
-            triggerAlert(
-                type = "MOVEMENT DETECTED",
-                message = "ASTRA GUARD ALERT: Unexpected device movement detected."
-            )
+            if (_guardState.value == GuardState.ACTIVE &&
+                (_guardMode.value == GuardMode.MOVEMENT || _guardMode.value == GuardMode.BOTH)
+            ) {
+                val now = System.currentTimeMillis()
+                if (now - lastAlertTimestamp < alertCooldownMs) return
+                lastAlertTimestamp = now
+
+                triggerAlert(
+                    type = "MOVEMENT DETECTED",
+                    message = "ASTRA GUARD ALERT: Unexpected device movement detected (${String.format(Locale.US, "%.1f", deltaAccel)} m/s²)."
+                )
+            }
         }
     }
 
@@ -220,8 +281,8 @@ class AstraGuardManager(
 
     fun triggerTestAlert() {
         triggerAlert(
-            type = "TEST ALERT",
-            message = "ASTRA GUARD SIMULATION: Verification alarm executed successfully."
+            type = "TEST ALARM",
+            message = "ASTRA GUARD VERIFICATION: Maximum volume alarm siren activated successfully."
         )
     }
 
@@ -230,7 +291,7 @@ class AstraGuardManager(
         _activeAlertType.value = type
         _activeAlertMessage.value = message
 
-        // Execute sound alarm
+        // Execute very loud alarm siren
         if (_isSoundEnabled.value) {
             startAlarmSiren()
         }
@@ -259,12 +320,28 @@ class AstraGuardManager(
         toneLoopJob?.cancel()
         toneLoopJob = scope.launch {
             try {
-                if (alarmToneGenerator == null) {
-                    alarmToneGenerator = ToneGenerator(AudioManager.STREAM_ALARM, 95)
+                // Maximize alarm audio stream volume if loud alarm is enabled
+                if (_isMaxLoudAlarmEnabled.value) {
+                    audioManager?.let { am ->
+                        try {
+                            val maxVol = am.getStreamMaxVolume(AudioManager.STREAM_ALARM)
+                            am.setStreamVolume(AudioManager.STREAM_ALARM, maxVol, 0)
+                        } catch (_: Exception) {}
+                    }
                 }
+
+                if (alarmToneGenerator == null) {
+                    // Maximum volume (100) on STREAM_ALARM
+                    alarmToneGenerator = ToneGenerator(AudioManager.STREAM_ALARM, 100)
+                }
+
+                var toggle = false
                 while (_guardState.value == GuardState.ALERT) {
-                    alarmToneGenerator?.startTone(ToneGenerator.TONE_CDMA_EMERGENCY_RINGBACK, 300)
-                    delay(450L)
+                    // Alternating dual-frequency emergency tones for maximum piercing alarm
+                    val tone = if (toggle) ToneGenerator.TONE_CDMA_EMERGENCY_RINGBACK else ToneGenerator.TONE_CDMA_ALERT_CALL_GUARD
+                    alarmToneGenerator?.startTone(tone, 320)
+                    toggle = !toggle
+                    delay(380L)
                 }
             } catch (_: Exception) {}
         }
@@ -273,7 +350,7 @@ class AstraGuardManager(
     private fun playBeep(toneType: Int, durationMs: Int) {
         if (!_isSoundEnabled.value) return
         try {
-            val tg = ToneGenerator(AudioManager.STREAM_NOTIFICATION, 80)
+            val tg = ToneGenerator(AudioManager.STREAM_NOTIFICATION, 90)
             tg.startTone(toneType, durationMs)
         } catch (_: Exception) {}
     }
@@ -283,19 +360,22 @@ class AstraGuardManager(
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 val vm = context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as? VibratorManager
                 vm?.vibrate(CombinedVibration.createParallel(
-                    VibrationEffect.createWaveform(longArrayOf(0, 200, 100, 200, 100, 300), -1)
+                    VibrationEffect.createWaveform(longArrayOf(0, 250, 100, 250, 100, 400), -1)
                 ))
             } else {
                 @Suppress("DEPRECATION")
                 val v = context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
                 @Suppress("DEPRECATION")
-                v?.vibrate(longArrayOf(0, 200, 100, 200, 100, 300), -1)
+                v?.vibrate(longArrayOf(0, 250, 100, 250, 100, 400), -1)
             }
         } catch (_: Exception) {}
     }
 
     fun destroy() {
         disarmGuard()
+        try {
+            sensorManager.unregisterListener(this)
+        } catch (_: Exception) {}
         alarmToneGenerator?.release()
         alarmToneGenerator = null
     }

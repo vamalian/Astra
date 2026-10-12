@@ -65,6 +65,16 @@ fun AstraAppRoot(
     val isVibrationEnabled by viewModel.guardManager.isVibrationEnabled.collectAsState()
     val activeAlertMessage by viewModel.guardManager.activeAlertMessage.collectAsState()
 
+    // Live Telemetry Verification states
+    val liveMovementDelta by viewModel.liveMovementDelta.collectAsState()
+    val liveAccelX by viewModel.liveAccelX.collectAsState()
+    val liveAccelY by viewModel.liveAccelY.collectAsState()
+    val liveAccelZ by viewModel.liveAccelZ.collectAsState()
+    val verifiedTouchCount by viewModel.verifiedTouchCount.collectAsState()
+    val lastVerifiedTouchTime by viewModel.lastVerifiedTouchTime.collectAsState()
+    val lastVerifiedMovementTime by viewModel.lastVerifiedMovementTime.collectAsState()
+    val isMaxLoudAlarmEnabled by viewModel.isMaxLoudAlarmEnabled.collectAsState()
+
     // Microphone permission launcher
     val micPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
@@ -110,6 +120,15 @@ fun AstraAppRoot(
                 installedApps = installedApps,
                 isListening = isListening,
                 isSpeaking = reactorState == com.example.data.model.ReactorState.SPEAKING,
+                liveMovementDelta = liveMovementDelta,
+                liveAccelX = liveAccelX,
+                liveAccelY = liveAccelY,
+                liveAccelZ = liveAccelZ,
+                verifiedTouchCount = verifiedTouchCount,
+                lastVerifiedTouchTime = lastVerifiedTouchTime,
+                lastVerifiedMovementTime = lastVerifiedMovementTime,
+                isMaxLoudAlarmEnabled = isMaxLoudAlarmEnabled,
+                onToggleMaxLoudAlarm = { enabled -> viewModel.setMaxLoudAlarmEnabled(enabled) },
                 onSendMessage = { prompt -> viewModel.sendMessage(prompt) },
                 onStartListening = onMicClick,
                 onStopListening = { viewModel.stopListening() },

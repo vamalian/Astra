@@ -1,12 +1,15 @@
 package com.example.ui.dashboard
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -14,18 +17,23 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.material.icons.filled.PanTool
 import androidx.compose.material.icons.filled.ScreenRotation
 import androidx.compose.material.icons.filled.Security
+import androidx.compose.material.icons.filled.TouchApp
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.DividerDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -70,6 +78,16 @@ fun AstraGuardView(
     armingCountdown: Int,
     activeAlertMessage: String?,
     alerts: List<AlertEntity>,
+    liveMovementDelta: Float = 0f,
+    liveAccelX: Float = 0f,
+    liveAccelY: Float = 0f,
+    liveAccelZ: Float = 9.8f,
+    verifiedTouchCount: Int = 0,
+    lastVerifiedTouchTime: String? = null,
+    lastVerifiedMovementTime: String? = null,
+    isMaxLoudAlarmEnabled: Boolean = true,
+    onToggleMaxLoudAlarm: (Boolean) -> Unit = {},
+    onTouchVerificationTap: () -> Unit = {},
     onStartArming: (mode: GuardMode, seconds: Int) -> Unit,
     onCancelArming: () -> Unit,
     onDisarm: () -> Unit,
@@ -94,13 +112,13 @@ fun AstraGuardView(
                 backgroundColor = Color(0xFF261805),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(bottom = 12.dp)
+                    .padding(bottom = 10.dp)
                     .testTag("security_alert_banner")
             ) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(14.dp),
+                        .padding(12.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
@@ -117,16 +135,16 @@ fun AstraGuardView(
                         Spacer(modifier = Modifier.width(10.dp))
                         Column {
                             Text(
-                                text = "ASTRA GUARD ALERT",
+                                text = "ASTRA GUARD ALERT // ALARM ACTIVE",
                                 color = AmberAlert,
-                                fontSize = 14.sp,
+                                fontSize = 13.sp,
                                 fontFamily = FontFamily.Monospace,
                                 fontWeight = FontWeight.Bold
                             )
                             Text(
                                 text = activeAlertMessage,
                                 color = PureWhite,
-                                fontSize = 12.sp,
+                                fontSize = 11.sp,
                                 fontFamily = FontFamily.Monospace
                             )
                         }
@@ -148,20 +166,20 @@ fun AstraGuardView(
                 backgroundColor = Color(0xFF1C1A0E),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(bottom = 12.dp)
+                    .padding(bottom = 10.dp)
                     .testTag("arming_countdown_card")
             ) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(14.dp),
+                        .padding(12.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Box(
                             modifier = Modifier
-                                .size(40.dp)
+                                .size(38.dp)
                                 .clip(RoundedCornerShape(8.dp))
                                 .background(AmberAlert.copy(alpha = 0.2f))
                                 .border(1.dp, AmberAlert, RoundedCornerShape(8.dp)),
@@ -170,24 +188,24 @@ fun AstraGuardView(
                             Text(
                                 text = "$armingCountdown",
                                 color = AmberAlert,
-                                fontSize = 18.sp,
+                                fontSize = 17.sp,
                                 fontFamily = FontFamily.Monospace,
                                 fontWeight = FontWeight.ExtraBold
                             )
                         }
-                        Spacer(modifier = Modifier.width(12.dp))
+                        Spacer(modifier = Modifier.width(10.dp))
                         Column {
                             Text(
                                 text = "CALIBRATING SENSORS...",
                                 color = AmberAlert,
-                                fontSize = 13.sp,
+                                fontSize = 12.sp,
                                 fontFamily = FontFamily.Monospace,
                                 fontWeight = FontWeight.Bold
                             )
                             Text(
                                 text = "Place tablet in position before countdown ends",
                                 color = MetallicSilver,
-                                fontSize = 11.sp
+                                fontSize = 10.sp
                             )
                         }
                     }
@@ -200,12 +218,12 @@ fun AstraGuardView(
             }
         }
 
-        // Main Guard Status HUD & Telemetry Card
+        // Main Guard Status HUD & Arming Card
         HudCard(
             borderColor = if (guardState == GuardState.ACTIVE) EmeraldActive else TitaniumBorder,
             modifier = Modifier.fillMaxWidth()
         ) {
-            Column(modifier = Modifier.padding(16.dp)) {
+            Column(modifier = Modifier.padding(14.dp)) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -216,19 +234,18 @@ fun AstraGuardView(
                             imageVector = Icons.Default.Security,
                             contentDescription = "Guard Security",
                             tint = if (guardState == GuardState.ACTIVE) EmeraldActive else ElectricCyan,
-                            modifier = Modifier.size(22.dp)
+                            modifier = Modifier.size(20.dp)
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
                             text = "ASTRA GUARD TELEMETRY",
                             color = PureWhite,
-                            fontSize = 14.sp,
+                            fontSize = 13.sp,
                             fontFamily = FontFamily.Monospace,
                             fontWeight = FontWeight.Bold
                         )
                     }
 
-                    // Status pill
                     val statusText = when (guardState) {
                         GuardState.OFF -> "GUARD DISARMED"
                         GuardState.ARMING -> "ARMING ($armingCountdown s)"
@@ -244,105 +261,15 @@ fun AstraGuardView(
                     Text(
                         text = statusText,
                         color = statusColor,
-                        fontSize = 12.sp,
+                        fontSize = 11.sp,
                         fontFamily = FontFamily.Monospace,
                         fontWeight = FontWeight.Bold
                     )
                 }
 
-                Spacer(modifier = Modifier.height(14.dp))
+                Spacer(modifier = Modifier.height(10.dp))
 
-                // Detector Status Indicators
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    // Touch Detector
-                    val touchActive = guardState == GuardState.ACTIVE &&
-                            (guardMode == GuardMode.TOUCH || guardMode == GuardMode.BOTH)
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(TitaniumSurface)
-                            .border(
-                                1.dp,
-                                if (touchActive) EmeraldActive.copy(alpha = 0.6f) else TitaniumBorder,
-                                RoundedCornerShape(8.dp)
-                            )
-                            .padding(10.dp)
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = Icons.Default.PanTool,
-                                contentDescription = "Touch Sensor",
-                                tint = if (touchActive) EmeraldActive else MetallicSilver,
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Column {
-                                Text(
-                                    text = "TOUCH DETECTOR",
-                                    color = MetallicSilver,
-                                    fontSize = 10.sp,
-                                    fontFamily = FontFamily.Monospace
-                                )
-                                Text(
-                                    text = if (touchActive) "ACTIVE" else "STANDBY",
-                                    color = if (touchActive) EmeraldActive else PureWhite,
-                                    fontSize = 11.sp,
-                                    fontFamily = FontFamily.Monospace,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-                        }
-                    }
-
-                    // Movement Detector
-                    val moveActive = guardState == GuardState.ACTIVE &&
-                            (guardMode == GuardMode.MOVEMENT || guardMode == GuardMode.BOTH)
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(TitaniumSurface)
-                            .border(
-                                1.dp,
-                                if (moveActive) EmeraldActive.copy(alpha = 0.6f) else TitaniumBorder,
-                                RoundedCornerShape(8.dp)
-                            )
-                            .padding(10.dp)
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = Icons.Default.ScreenRotation,
-                                contentDescription = "Movement Sensor",
-                                tint = if (moveActive) EmeraldActive else MetallicSilver,
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Column {
-                                Text(
-                                    text = "MOTION (${sensitivity.displayName})",
-                                    color = MetallicSilver,
-                                    fontSize = 10.sp,
-                                    fontFamily = FontFamily.Monospace
-                                )
-                                Text(
-                                    text = if (moveActive) "ACTIVE" else "STANDBY",
-                                    color = if (moveActive) EmeraldActive else PureWhite,
-                                    fontSize = 11.sp,
-                                    fontFamily = FontFamily.Monospace,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-                        }
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(14.dp))
-
-                // Action Buttons Row
+                // Action Buttons Row: Arm/Disarm & Loud Test Alarm
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -368,17 +295,221 @@ fun AstraGuardView(
                     }
 
                     HudButton(
-                        text = "TEST ALERT",
+                        text = "TEST LOUD ALARM",
                         onClick = onTestAlert,
                         icon = Icons.Default.NotificationsActive,
-                        modifier = Modifier.weight(1f),
+                        alertStyle = true,
+                        modifier = Modifier.weight(1.2f),
                         testTag = "test_alert_button"
                     )
                 }
             }
         }
 
-        Spacer(modifier = Modifier.height(14.dp))
+        Spacer(modifier = Modifier.height(10.dp))
+
+        // LIVE VERIFICATION MONITOR CARD (Touches & Movements Real-time)
+        HudCard(
+            borderColor = ElectricCyan.copy(alpha = 0.6f),
+            backgroundColor = DarkGraphite,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(modifier = Modifier.padding(14.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(
+                            modifier = Modifier
+                                .size(8.dp)
+                                .clip(CircleShape)
+                                .background(EmeraldActive)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "LIVE SENSOR & TOUCH VERIFICATION",
+                            color = PureWhite,
+                            fontSize = 12.sp,
+                            fontFamily = FontFamily.Monospace,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+
+                    // Max Volume Boost switch
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.VolumeUp,
+                            contentDescription = "Loud Volume",
+                            tint = if (isMaxLoudAlarmEnabled) AmberAlert else MetallicSilver,
+                            modifier = Modifier.size(15.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = "MAX LOUD ALARM",
+                            color = if (isMaxLoudAlarmEnabled) AmberAlert else MetallicSilver,
+                            fontSize = 10.sp,
+                            fontFamily = FontFamily.Monospace,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Switch(
+                            checked = isMaxLoudAlarmEnabled,
+                            onCheckedChange = onToggleMaxLoudAlarm,
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = AmberAlert,
+                                checkedTrackColor = TitaniumSurface
+                            ),
+                            modifier = Modifier.size(width = 36.dp, height = 24.dp)
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                // Movement Verification Gauge
+                val movementRatio = (liveMovementDelta / sensitivity.threshold).coerceIn(0f, 1.5f)
+                val isThresholdExceeded = liveMovementDelta > sensitivity.threshold
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(TitaniumSurface)
+                        .border(
+                            1.dp,
+                            if (isThresholdExceeded) RedAlert else TitaniumBorder,
+                            RoundedCornerShape(8.dp)
+                        )
+                        .padding(10.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.ScreenRotation,
+                                contentDescription = "Movement Sensor",
+                                tint = if (isThresholdExceeded) RedAlert else IceBlue,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "ACCELEROMETER MOTION DELTA",
+                                color = PureWhite,
+                                fontSize = 11.sp,
+                                fontFamily = FontFamily.Monospace,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+
+                        Text(
+                            text = String.format(Locale.US, "Δ %.2f m/s² (Limit: %.1f)", liveMovementDelta, sensitivity.threshold),
+                            color = if (isThresholdExceeded) RedAlert else ElectricCyan,
+                            fontSize = 11.sp,
+                            fontFamily = FontFamily.Monospace,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    LinearProgressIndicator(
+                        progress = { (movementRatio / 1.5f).coerceIn(0f, 1f) },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(6.dp)
+                            .clip(RoundedCornerShape(3.dp)),
+                        color = if (isThresholdExceeded) RedAlert else if (movementRatio > 0.6f) AmberAlert else ElectricCyan,
+                        trackColor = DarkGraphite
+                    )
+
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            text = String.format(Locale.US, "X: %.1f  Y: %.1f  Z: %.1f", liveAccelX, liveAccelY, liveAccelZ),
+                            color = MetallicSilver,
+                            fontSize = 10.sp,
+                            fontFamily = FontFamily.Monospace
+                        )
+                        Text(
+                            text = if (isThresholdExceeded) "THRESHOLD EXCEEDED!" else "STATUS: STABLE",
+                            color = if (isThresholdExceeded) RedAlert else EmeraldActive,
+                            fontSize = 10.sp,
+                            fontFamily = FontFamily.Monospace,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // Interactive Touch Verification Pad
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(TitaniumSurface)
+                        .border(1.dp, IceBlue.copy(alpha = 0.5f), RoundedCornerShape(8.dp))
+                        .clickable { onTouchVerificationTap() }
+                        .padding(horizontal = 12.dp, vertical = 10.dp)
+                        .testTag("touch_verification_pad")
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.TouchApp,
+                                contentDescription = "Touch Verification",
+                                tint = IceBlue,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Column {
+                                Text(
+                                    text = "TOUCH VERIFICATION TEST PAD",
+                                    color = PureWhite,
+                                    fontSize = 11.sp,
+                                    fontFamily = FontFamily.Monospace,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    text = "Tap here or anywhere on screen to test touch reception",
+                                    color = MetallicSilver,
+                                    fontSize = 10.sp
+                                )
+                            }
+                        }
+
+                        Column(horizontalAlignment = Alignment.End) {
+                            Text(
+                                text = "VERIFIED: $verifiedTouchCount TAPS",
+                                color = EmeraldActive,
+                                fontSize = 11.sp,
+                                fontFamily = FontFamily.Monospace,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                text = lastVerifiedTouchTime ?: "--",
+                                color = IceBlue,
+                                fontSize = 10.sp,
+                                fontFamily = FontFamily.Monospace
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(10.dp))
 
         // Alert History Card
         HudCard(
@@ -386,7 +517,7 @@ fun AstraGuardView(
                 .fillMaxWidth()
                 .weight(1f)
         ) {
-            Column(modifier = Modifier.padding(14.dp)) {
+            Column(modifier = Modifier.padding(12.dp)) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -395,7 +526,7 @@ fun AstraGuardView(
                     Text(
                         text = "SECURITY AUDIT LOG (${alerts.size})",
                         color = PureWhite,
-                        fontSize = 13.sp,
+                        fontSize = 12.sp,
                         fontFamily = FontFamily.Monospace,
                         fontWeight = FontWeight.Bold
                     )
@@ -408,13 +539,13 @@ fun AstraGuardView(
                                 imageVector = Icons.Default.DeleteOutline,
                                 contentDescription = "Clear History",
                                 tint = MetallicSilver,
-                                modifier = Modifier.size(16.dp)
+                                modifier = Modifier.size(15.dp)
                             )
                             Spacer(modifier = Modifier.width(4.dp))
                             Text(
                                 text = "CLEAR LOG",
                                 color = MetallicSilver,
-                                fontSize = 11.sp,
+                                fontSize = 10.sp,
                                 fontFamily = FontFamily.Monospace
                             )
                         }
@@ -424,20 +555,20 @@ fun AstraGuardView(
                 HorizontalDivider(
                     color = TitaniumBorder,
                     thickness = 1.dp,
-                    modifier = Modifier.padding(vertical = 8.dp)
+                    modifier = Modifier.padding(vertical = 6.dp)
                 )
 
                 if (alerts.isEmpty()) {
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(vertical = 24.dp),
+                            .padding(vertical = 16.dp),
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
                             text = "No security events recorded. System secure.",
                             color = MetallicSilver,
-                            fontSize = 12.sp,
+                            fontSize = 11.sp,
                             fontFamily = FontFamily.Monospace
                         )
                     }
@@ -447,7 +578,7 @@ fun AstraGuardView(
                         modifier = Modifier
                             .fillMaxWidth()
                             .weight(1f),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         items(alerts, key = { it.id }) { alert ->
                             Row(
@@ -455,14 +586,14 @@ fun AstraGuardView(
                                     .fillMaxWidth()
                                     .clip(RoundedCornerShape(6.dp))
                                     .background(TitaniumSurface)
-                                    .padding(horizontal = 10.dp, vertical = 8.dp),
+                                    .padding(horizontal = 8.dp, vertical = 6.dp),
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Box(
                                         modifier = Modifier
-                                            .size(8.dp)
+                                            .size(7.dp)
                                             .clip(RoundedCornerShape(2.dp))
                                             .background(
                                                 if (alert.eventType.contains("BREACH") || alert.eventType.contains("MOVEMENT"))
@@ -474,7 +605,7 @@ fun AstraGuardView(
                                         Text(
                                             text = alert.eventType,
                                             color = PureWhite,
-                                            fontSize = 12.sp,
+                                            fontSize = 11.sp,
                                             fontFamily = FontFamily.Monospace,
                                             fontWeight = FontWeight.Bold
                                         )
@@ -488,7 +619,7 @@ fun AstraGuardView(
                                 Text(
                                     text = dateFormat.format(Date(alert.timestamp)),
                                     color = IceBlue,
-                                    fontSize = 10.sp,
+                                    fontSize = 9.sp,
                                     fontFamily = FontFamily.Monospace
                                 )
                             }

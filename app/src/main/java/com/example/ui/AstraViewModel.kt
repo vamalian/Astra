@@ -108,6 +108,19 @@ class AstraViewModel(application: Application) : AndroidViewModel(application) {
         }
     )
 
+    val liveMovementDelta = guardManager.liveMovementDelta
+    val liveAccelX = guardManager.liveAccelX
+    val liveAccelY = guardManager.liveAccelY
+    val liveAccelZ = guardManager.liveAccelZ
+    val verifiedTouchCount = guardManager.verifiedTouchCount
+    val lastVerifiedTouchTime = guardManager.lastVerifiedTouchTime
+    val lastVerifiedMovementTime = guardManager.lastVerifiedMovementTime
+    val isMaxLoudAlarmEnabled = guardManager.isMaxLoudAlarmEnabled
+
+    fun setMaxLoudAlarmEnabled(enabled: Boolean) {
+        guardManager.setMaxLoudAlarmEnabled(enabled)
+    }
+
     init {
         refreshSystemStatus()
         loadInstalledApps()
