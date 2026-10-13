@@ -28,7 +28,8 @@ enum class GuardMode {
 enum class GuardSensitivity(val displayName: String, val threshold: Float) {
     LOW("LOW", 4.5f),
     MEDIUM("MEDIUM", 2.6f),
-    HIGH("HIGH", 1.3f)
+    HIGH("HIGH", 1.3f),
+    ULTRA("ULTRA", 0.5f)
 }
 
 data class ChatMessage(

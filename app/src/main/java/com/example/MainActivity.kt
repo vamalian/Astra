@@ -3,6 +3,7 @@ package com.example
 import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Bundle
+import android.view.MotionEvent
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
@@ -17,7 +18,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.core.content.ContextCompat
-import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.lifecycle.ViewModelProvider
 import com.example.ui.AstraViewModel
 import com.example.ui.dashboard.AstraMainDashboard
 import com.example.ui.dashboard.SettingsDialog
@@ -25,20 +26,31 @@ import com.example.ui.theme.AstraTheme
 import com.example.ui.theme.ObsidianBlack
 
 class MainActivity : ComponentActivity() {
+
+    private lateinit var viewModel: AstraViewModel
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        viewModel = ViewModelProvider(this)[AstraViewModel::class.java]
         enableEdgeToEdge()
         setContent {
             AstraTheme {
-                AstraAppRoot()
+                AstraAppRoot(viewModel = viewModel)
             }
         }
+    }
+
+    override fun dispatchTouchEvent(ev: MotionEvent?): Boolean {
+        if (ev?.actionMasked == MotionEvent.ACTION_DOWN) {
+            viewModel.onScreenTouched(ev.x, ev.y)
+        }
+        return super.dispatchTouchEvent(ev)
     }
 }
 
 @Composable
 fun AstraAppRoot(
-    viewModel: AstraViewModel = viewModel()
+    viewModel: AstraViewModel
 ) {
     val reactorState by viewModel.reactorState.collectAsState()
     val audioRms by viewModel.audioRms.collectAsState()
@@ -100,7 +112,7 @@ fun AstraAppRoot(
     Scaffold(
         modifier = Modifier.fillMaxSize(),
         containerColor = ObsidianBlack
-    ) { innerPadding ->
+    ) { _ ->
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -129,6 +141,8 @@ fun AstraAppRoot(
                 lastVerifiedMovementTime = lastVerifiedMovementTime,
                 isMaxLoudAlarmEnabled = isMaxLoudAlarmEnabled,
                 onToggleMaxLoudAlarm = { enabled -> viewModel.setMaxLoudAlarmEnabled(enabled) },
+                onSimulateMovement = { viewModel.simulateMovementSpike() },
+                onChangeSensitivity = { sens -> viewModel.guardManager.setSensitivity(sens) },
                 onSendMessage = { prompt -> viewModel.sendMessage(prompt) },
                 onStartListening = onMicClick,
                 onStopListening = { viewModel.stopListening() },
@@ -150,7 +164,7 @@ fun AstraAppRoot(
                 onOpenSound = { viewModel.openSound() },
                 onOpenAppSettings = { viewModel.openAppSettings() },
                 onOpenSettings = { viewModel.openSettings() },
-                onScreenTouched = { viewModel.onScreenTouched() }
+                onScreenTouched = { x, y -> viewModel.onScreenTouched(x, y) }
             )
 
             if (isSettingsOpen) {

@@ -112,13 +112,20 @@ class AstraViewModel(application: Application) : AndroidViewModel(application) {
     val liveAccelX = guardManager.liveAccelX
     val liveAccelY = guardManager.liveAccelY
     val liveAccelZ = guardManager.liveAccelZ
+    val isSensorHardwareActive = guardManager.isSensorHardwareActive
+    val verifiedMovementCount = guardManager.verifiedMovementCount
+    val lastVerifiedMovementTime = guardManager.lastVerifiedMovementTime
     val verifiedTouchCount = guardManager.verifiedTouchCount
     val lastVerifiedTouchTime = guardManager.lastVerifiedTouchTime
-    val lastVerifiedMovementTime = guardManager.lastVerifiedMovementTime
+    val lastTouchLocation = guardManager.lastTouchLocation
     val isMaxLoudAlarmEnabled = guardManager.isMaxLoudAlarmEnabled
 
     fun setMaxLoudAlarmEnabled(enabled: Boolean) {
         guardManager.setMaxLoudAlarmEnabled(enabled)
+    }
+
+    fun simulateMovementSpike() {
+        guardManager.simulateMovementSpike()
     }
 
     init {
@@ -257,8 +264,8 @@ class AstraViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun onScreenTouched() {
-        guardManager.onScreenTouched()
+    fun onScreenTouched(x: Float = 0f, y: Float = 0f) {
+        guardManager.onScreenTouched(x, y)
     }
 
     // Device Actions

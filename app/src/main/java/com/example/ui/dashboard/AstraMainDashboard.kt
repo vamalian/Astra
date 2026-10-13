@@ -40,6 +40,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
@@ -89,11 +90,16 @@ fun AstraMainDashboard(
     liveAccelX: Float = 0f,
     liveAccelY: Float = 0f,
     liveAccelZ: Float = 9.8f,
+    isSensorHardwareActive: Boolean = true,
+    verifiedMovementCount: Int = 0,
+    lastVerifiedMovementTime: String = "Hardware ready",
     verifiedTouchCount: Int = 0,
-    lastVerifiedTouchTime: String? = null,
-    lastVerifiedMovementTime: String? = null,
+    lastVerifiedTouchTime: String = "Ready for touch",
+    lastTouchLocation: String = "Tap anywhere to test",
     isMaxLoudAlarmEnabled: Boolean = true,
     onToggleMaxLoudAlarm: (Boolean) -> Unit = {},
+    onSimulateMovement: () -> Unit = {},
+    onChangeSensitivity: (GuardSensitivity) -> Unit = {},
     onSendMessage: (String) -> Unit,
     onStartListening: () -> Unit,
     onStopListening: () -> Unit,
@@ -115,7 +121,7 @@ fun AstraMainDashboard(
     onOpenSound: () -> Unit,
     onOpenAppSettings: () -> Unit,
     onOpenSettings: () -> Unit,
-    onScreenTouched: () -> Unit,
+    onScreenTouched: (x: Float, y: Float) -> Unit,
     modifier: Modifier = Modifier
 ) {
     var activeTab by remember { mutableIntStateOf(0) }
@@ -129,9 +135,10 @@ fun AstraMainDashboard(
             .pointerInput(Unit) {
                 awaitPointerEventScope {
                     while (true) {
-                        val event = awaitPointerEvent()
+                        val event = awaitPointerEvent(PointerEventPass.Initial)
                         if (event.type == PointerEventType.Press) {
-                            onScreenTouched()
+                            val pos = event.changes.firstOrNull()?.position
+                            onScreenTouched(pos?.x ?: 0f, pos?.y ?: 0f)
                         }
                     }
                 }
@@ -254,12 +261,17 @@ fun AstraMainDashboard(
                                         liveAccelX = liveAccelX,
                                         liveAccelY = liveAccelY,
                                         liveAccelZ = liveAccelZ,
+                                        isSensorHardwareActive = isSensorHardwareActive,
+                                        verifiedMovementCount = verifiedMovementCount,
+                                        lastVerifiedMovementTime = lastVerifiedMovementTime,
                                         verifiedTouchCount = verifiedTouchCount,
                                         lastVerifiedTouchTime = lastVerifiedTouchTime,
-                                        lastVerifiedMovementTime = lastVerifiedMovementTime,
+                                        lastTouchLocation = lastTouchLocation,
                                         isMaxLoudAlarmEnabled = isMaxLoudAlarmEnabled,
                                         onToggleMaxLoudAlarm = onToggleMaxLoudAlarm,
-                                        onTouchVerificationTap = onScreenTouched,
+                                        onTouchVerificationTap = { onScreenTouched(0f, 0f) },
+                                        onSimulateMovement = onSimulateMovement,
+                                        onChangeSensitivity = onChangeSensitivity,
                                         onStartArming = onStartArming,
                                         onCancelArming = onCancelArming,
                                         onDisarm = onDisarm,
@@ -338,12 +350,17 @@ fun AstraMainDashboard(
                                     liveAccelX = liveAccelX,
                                     liveAccelY = liveAccelY,
                                     liveAccelZ = liveAccelZ,
+                                    isSensorHardwareActive = isSensorHardwareActive,
+                                    verifiedMovementCount = verifiedMovementCount,
+                                    lastVerifiedMovementTime = lastVerifiedMovementTime,
                                     verifiedTouchCount = verifiedTouchCount,
                                     lastVerifiedTouchTime = lastVerifiedTouchTime,
-                                    lastVerifiedMovementTime = lastVerifiedMovementTime,
+                                    lastTouchLocation = lastTouchLocation,
                                     isMaxLoudAlarmEnabled = isMaxLoudAlarmEnabled,
                                     onToggleMaxLoudAlarm = onToggleMaxLoudAlarm,
-                                    onTouchVerificationTap = onScreenTouched,
+                                    onTouchVerificationTap = { onScreenTouched(0f, 0f) },
+                                    onSimulateMovement = onSimulateMovement,
+                                    onChangeSensitivity = onChangeSensitivity,
                                     onStartArming = onStartArming,
                                     onCancelArming = onCancelArming,
                                     onDisarm = onDisarm,
