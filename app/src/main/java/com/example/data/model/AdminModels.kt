@@ -13,6 +13,28 @@ import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.VerifiedUser
 import androidx.compose.ui.graphics.vector.ImageVector
 
+enum class AppScreen {
+    ASSISTANT,
+    ADMIN_PIN,
+    ADMIN_PANEL
+}
+
+data class AstraChatMessage(
+    val id: String = java.util.UUID.randomUUID().toString(),
+    val text: String,
+    val isUser: Boolean,
+    val timestamp: Long = System.currentTimeMillis()
+)
+
+data class WeatherTelemetry(
+    val temperatureCelsius: Int = 24,
+    val condition: String = "Clear Skies",
+    val humidityPercent: Int = 58,
+    val pressureHpa: Int = 1013,
+    val windKmh: Int = 12,
+    val atmosphericQuality: String = "OPTIMAL"
+)
+
 enum class ReactorState {
     IDLE,
     LISTENING,

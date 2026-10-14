@@ -62,7 +62,7 @@ class AdminPreferencesManager(private val context: Context) {
         if (_securityEvents.value.isEmpty()) {
             addSecurityEvent(
                 type = "SYSTEM_INITIALIZED",
-                description = "ASTRA NEXUS Admin Console initialized. Default PIN 600 active.",
+                description = "ASTRA AI Command & Control initialized. System secured.",
                 severity = "INFO"
             )
         }
@@ -283,7 +283,7 @@ class AdminPreferencesManager(private val context: Context) {
             append("{\n")
             append("  \"version\": \"1.0.0\",\n")
             append("  \"export_timestamp\": \"$exportTimestamp\",\n")
-            append("  \"app\": \"ASTRA NEXUS\",\n")
+            append("  \"app\": \"ASTRA AI\",\n")
             append("  \"auto_lock_enabled\": ${_autoLockEnabled.value},\n")
             append("  \"inactivity_timeout_minutes\": ${timeout.minutes},\n")
             append("  \"appearance\": {\n")
@@ -308,8 +308,8 @@ class AdminPreferencesManager(private val context: Context) {
 
     fun importConfigJson(jsonString: String): Result<String> {
         return try {
-            if (!jsonString.contains("ASTRA NEXUS") && !jsonString.contains("auto_lock_enabled")) {
-                return Result.failure(IllegalArgumentException("Invalid JSON format for ASTRA NEXUS config."))
+            if (!jsonString.contains("ASTRA") && !jsonString.contains("auto_lock_enabled")) {
+                return Result.failure(IllegalArgumentException("Invalid JSON format for ASTRA AI config."))
             }
 
             // Quick extraction of key fields
@@ -369,7 +369,7 @@ class AdminPreferencesManager(private val context: Context) {
     }
 
     companion object {
-        const val DEFAULT_PIN = "600"
+        const val DEFAULT_PIN = "4000"
         private const val KEY_ADMIN_PIN = "key_admin_pin"
         private const val KEY_AUTO_LOCK_ENABLED = "key_auto_lock_enabled"
         private const val KEY_INACTIVITY_TIMEOUT = "key_inactivity_timeout"

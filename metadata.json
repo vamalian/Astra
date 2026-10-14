@@ -1,6 +1,6 @@
 {
-  "name": "ASTRA NEXUS",
-  "description": "Futuristic standalone admin console for ASTRA configuration, security, appearance, API settings, and diagnostics on Android tablets.",
+  "name": "ASTRA AI",
+  "description": "Futuristic JARVIS-inspired Android tablet AI assistant with animated multi-ring ARC Reactor, Gemini AI intelligence, native voice system, and integrated Admin Panel.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

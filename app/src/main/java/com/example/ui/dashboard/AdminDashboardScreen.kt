@@ -112,7 +112,7 @@ fun AdminDashboardScreen(
                             .padding(end = 16.dp)
                     ) {
                         Text(
-                            text = "ASTRA NEXUS HOST: ${overview.deviceName.ifEmpty { diagnostics.deviceManufacturer + " " + diagnostics.deviceModel }}",
+                            text = "ASTRA AI HOST: ${overview.deviceName.ifEmpty { diagnostics.deviceManufacturer + " " + diagnostics.deviceModel }}",
                             color = PureWhite,
                             fontSize = 17.sp,
                             fontFamily = FontFamily.Monospace,

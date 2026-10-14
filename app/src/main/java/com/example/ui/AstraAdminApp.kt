@@ -27,6 +27,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ExitToApp
 import androidx.compose.material.icons.filled.BatteryChargingFull
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Menu
@@ -52,19 +54,19 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.model.AdminNavDestination
+import com.example.data.model.AppScreen
 import com.example.ui.about.AboutScreen
 import com.example.ui.api.ApiConfigScreen
 import com.example.ui.appearance.AppearanceSettingsScreen
+import com.example.ui.assistant.AstraAssistantScreen
 import com.example.ui.backup.BackupRestoreScreen
 import com.example.ui.components.AdminActionButton
-import com.example.ui.components.AdminStatusBadge
 import com.example.ui.dashboard.AdminDashboardScreen
 import com.example.ui.diagnostics.DiagnosticsScreen
 import com.example.ui.login.AdminLoginScreen
 import com.example.ui.permissions.PermissionsScreen
 import com.example.ui.security.SecuritySettingsScreen
 import com.example.ui.theme.AstraNexusTheme
-import com.example.ui.theme.EmeraldActive
 import com.example.ui.theme.LocalNexusPalette
 import com.example.ui.theme.MetallicSilver
 import com.example.ui.theme.PureWhite
@@ -77,6 +79,7 @@ fun AstraAdminApp(
     viewModel: AstraAdminViewModel,
     modifier: Modifier = Modifier
 ) {
+    val currentAppScreen by viewModel.currentAppScreen.collectAsState()
     val isUnlocked by viewModel.isUnlocked.collectAsState()
     val appearance by viewModel.appearancePreferences.collectAsState()
     val currentDestination by viewModel.currentDestination.collectAsState()
@@ -96,125 +99,146 @@ fun AstraAdminApp(
     ) {
         val palette = LocalNexusPalette.current
 
-        if (!isUnlocked) {
-            AdminLoginScreen(
-                onUnlockSuccessful = { viewModel.navigateTo(AdminNavDestination.DASHBOARD) },
-                verifyPin = { pin -> viewModel.verifyPin(pin) },
-                isDefaultPinActive = viewModel.isDefaultPinActive()
-            )
-        } else {
-            // Handle system back button to return to Dashboard if in sub-screen
-            BackHandler(enabled = currentDestination != AdminNavDestination.DASHBOARD) {
-                viewModel.navigateTo(AdminNavDestination.DASHBOARD)
+        when (currentAppScreen) {
+            AppScreen.ASSISTANT -> {
+                // Main ASTRA AI Assistant Screen (Startup default!)
+                AstraAssistantScreen(
+                    viewModel = viewModel,
+                    modifier = modifier
+                )
             }
 
-            BoxWithConstraints(modifier = modifier.fillMaxSize()) {
-                val isWideScreen = maxWidth >= 700.dp
-                val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
-                val scope = rememberCoroutineScope()
+            AppScreen.ADMIN_PIN -> {
+                // PIN Gate Screen
+                AdminLoginScreen(
+                    onUnlockSuccessful = { viewModel.navigateTo(AdminNavDestination.DASHBOARD) },
+                    onBackToAssistant = { viewModel.returnToAssistant() },
+                    verifyPin = { pin -> viewModel.verifyPin(pin) },
+                    modifier = modifier
+                )
+            }
 
-                if (isWideScreen) {
-                    // Tablet Two-Pane Layout with Fixed Sidebar
-                    Row(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .background(palette.background)
-                    ) {
-                        // Left Sidebar
-                        SidebarContent(
-                            currentDestination = currentDestination,
-                            onSelectDestination = { dest -> viewModel.navigateTo(dest) },
-                            compact = appearance.compactSidebar,
-                            modifier = Modifier
-                                .width(if (appearance.compactSidebar) 80.dp else 260.dp)
-                                .fillMaxHeight()
-                        )
+            AppScreen.ADMIN_PANEL -> {
+                // Integrated Admin Console
+                BackHandler {
+                    viewModel.lockConsole("Returned to ASTRA assistant via back gesture.")
+                }
 
-                        // Main Content Area
-                        Column(
+                BoxWithConstraints(modifier = modifier.fillMaxSize()) {
+                    val isWideScreen = maxWidth >= 700.dp
+                    val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
+                    val scope = rememberCoroutineScope()
+
+                    if (isWideScreen) {
+                        // Tablet Two-Pane Layout with Fixed Sidebar
+                        Row(
                             modifier = Modifier
-                                .weight(1f)
-                                .fillMaxHeight()
+                                .fillMaxSize()
+                                .background(palette.background)
                         ) {
-                            TopAdminHeader(
-                                title = "ASTRA NEXUS // ADMIN CONSOLE",
-                                timeString = if (appearance.showHeaderClock) systemOverview.dateTimeString else null,
-                                batteryPct = diagnostics.batteryLevel,
-                                isCharging = diagnostics.isCharging,
-                                onLockClick = { viewModel.lockConsole() },
-                                onMenuClick = null
-                            )
-
-                            // Main Destination View
-                            AnimatedContent(
-                                targetState = currentDestination,
-                                transitionSpec = { fadeIn() togetherWith fadeOut() },
-                                label = "nav_content"
-                            ) { dest ->
-                                DestinationRouter(
-                                    destination = dest,
-                                    viewModel = viewModel,
-                                    overview = systemOverview,
-                                    diagnostics = diagnostics,
-                                    appearance = appearance,
-                                    apiConfig = apiConfig,
-                                    securityEvents = securityEvents,
-                                    autoLockEnabled = autoLockEnabled,
-                                    inactivityTimeout = inactivityTimeout,
-                                    isTestingLatency = isTestingLatency,
-                                    isTestingApi = isTestingApi,
-                                    apiTestResult = apiTestResult
-                                )
-                            }
-                        }
-                    }
-                } else {
-                    // Portrait / Compact Screen Layout with Drawer
-                    ModalNavigationDrawer(
-                        drawerState = drawerState,
-                        drawerContent = {
+                            // Left Sidebar
                             SidebarContent(
                                 currentDestination = currentDestination,
-                                onSelectDestination = { dest ->
-                                    viewModel.navigateTo(dest)
-                                    scope.launch { drawerState.close() }
-                                },
-                                compact = false,
+                                onSelectDestination = { dest -> viewModel.navigateTo(dest) },
+                                onExitToAssistant = { viewModel.lockConsole("Exited admin console to assistant.") },
+                                compact = appearance.compactSidebar,
                                 modifier = Modifier
-                                    .width(280.dp)
+                                    .width(if (appearance.compactSidebar) 80.dp else 260.dp)
                                     .fillMaxHeight()
                             )
-                        }
-                    ) {
-                        Scaffold(
-                            containerColor = palette.background,
-                            contentWindowInsets = WindowInsets(0, 0, 0, 0),
-                            topBar = {
+
+                            // Main Content Area
+                            Column(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .fillMaxHeight()
+                            ) {
                                 TopAdminHeader(
-                                    title = "ASTRA NEXUS",
+                                    title = "ASTRA AI // ADMIN CONSOLE",
                                     timeString = if (appearance.showHeaderClock) systemOverview.dateTimeString else null,
                                     batteryPct = diagnostics.batteryLevel,
                                     isCharging = diagnostics.isCharging,
+                                    onExitClick = { viewModel.lockConsole("Exited admin console to assistant.") },
                                     onLockClick = { viewModel.lockConsole() },
-                                    onMenuClick = { scope.launch { drawerState.open() } }
+                                    onMenuClick = null
+                                )
+
+                                // Main Destination View
+                                AnimatedContent(
+                                    targetState = currentDestination,
+                                    transitionSpec = { fadeIn() togetherWith fadeOut() },
+                                    label = "nav_content"
+                                ) { dest ->
+                                    DestinationRouter(
+                                        destination = dest,
+                                        viewModel = viewModel,
+                                        overview = systemOverview,
+                                        diagnostics = diagnostics,
+                                        appearance = appearance,
+                                        apiConfig = apiConfig,
+                                        securityEvents = securityEvents,
+                                        autoLockEnabled = autoLockEnabled,
+                                        inactivityTimeout = inactivityTimeout,
+                                        isTestingLatency = isTestingLatency,
+                                        isTestingApi = isTestingApi,
+                                        apiTestResult = apiTestResult
+                                    )
+                                }
+                            }
+                        }
+                    } else {
+                        // Portrait / Compact Screen Layout with Drawer
+                        ModalNavigationDrawer(
+                            drawerState = drawerState,
+                            drawerContent = {
+                                SidebarContent(
+                                    currentDestination = currentDestination,
+                                    onSelectDestination = { dest ->
+                                        viewModel.navigateTo(dest)
+                                        scope.launch { drawerState.close() }
+                                    },
+                                    onExitToAssistant = {
+                                        scope.launch { drawerState.close() }
+                                        viewModel.lockConsole("Exited admin console to assistant.")
+                                    },
+                                    compact = false,
+                                    modifier = Modifier
+                                        .width(280.dp)
+                                        .fillMaxHeight()
                                 )
                             }
-                        ) { paddingValues ->
-                            Box(modifier = Modifier.padding(paddingValues)) {
-                                DestinationRouter(
-                                    destination = currentDestination,
-                                    viewModel = viewModel,
-                                    overview = systemOverview,
-                                    diagnostics = diagnostics,
-                                    appearance = appearance,
-                                    apiConfig = apiConfig,
-                                    securityEvents = securityEvents,
-                                    autoLockEnabled = autoLockEnabled,
-                                    inactivityTimeout = inactivityTimeout,
-                                    isTestingLatency = isTestingLatency,
-                                    isTestingApi = isTestingApi,
-                                    apiTestResult = apiTestResult
-                                )
+                        ) {
+                            Scaffold(
+                                containerColor = palette.background,
+                                contentWindowInsets = WindowInsets(0, 0, 0, 0),
+                                topBar = {
+                                    TopAdminHeader(
+                                        title = "ASTRA AI",
+                                        timeString = if (appearance.showHeaderClock) systemOverview.dateTimeString else null,
+                                        batteryPct = diagnostics.batteryLevel,
+                                        isCharging = diagnostics.isCharging,
+                                        onExitClick = { viewModel.lockConsole("Exited admin console to assistant.") },
+                                        onLockClick = { viewModel.lockConsole() },
+                                        onMenuClick = { scope.launch { drawerState.open() } }
+                                    )
+                                }
+                            ) { paddingValues ->
+                                Box(modifier = Modifier.padding(paddingValues)) {
+                                    DestinationRouter(
+                                        destination = currentDestination,
+                                        viewModel = viewModel,
+                                        overview = systemOverview,
+                                        diagnostics = diagnostics,
+                                        appearance = appearance,
+                                        apiConfig = apiConfig,
+                                        securityEvents = securityEvents,
+                                        autoLockEnabled = autoLockEnabled,
+                                        inactivityTimeout = inactivityTimeout,
+                                        isTestingLatency = isTestingLatency,
+                                        isTestingApi = isTestingApi,
+                                        apiTestResult = apiTestResult
+                                    )
+                                }
                             }
                         }
                     }
@@ -230,6 +254,7 @@ private fun TopAdminHeader(
     timeString: String?,
     batteryPct: Int,
     isCharging: Boolean,
+    onExitClick: () -> Unit,
     onLockClick: () -> Unit,
     onMenuClick: (() -> Unit)?,
     modifier: Modifier = Modifier
@@ -251,12 +276,13 @@ private fun TopAdminHeader(
                 IconButton(onClick = onMenuClick) {
                     Icon(
                         imageVector = Icons.Default.Menu,
-                        contentDescription = "Menu",
+                        contentDescription = "Open Drawer",
                         tint = palette.primary
                     )
                 }
-                Spacer(modifier = Modifier.width(6.dp))
+                Spacer(modifier = Modifier.width(8.dp))
             }
+
             Text(
                 text = title,
                 color = PureWhite,
@@ -265,41 +291,47 @@ private fun TopAdminHeader(
                 fontWeight = FontWeight.Bold,
                 letterSpacing = 1.5.sp
             )
-            Spacer(modifier = Modifier.width(12.dp))
-            AdminStatusBadge(text = "ARMED", color = EmeraldActive)
         }
 
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(14.dp)
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             if (timeString != null) {
                 Text(
                     text = timeString,
-                    color = palette.primary,
-                    fontSize = 11.sp,
-                    fontFamily = FontFamily.Monospace,
-                    fontWeight = FontWeight.SemiBold
+                    color = MetallicSilver,
+                    fontSize = 12.sp,
+                    fontFamily = FontFamily.Monospace
                 )
             }
 
-            // Battery telemetry badge
+            // Battery display
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(
                     imageVector = Icons.Default.BatteryChargingFull,
                     contentDescription = null,
-                    tint = if (batteryPct < 20) RedAlert else EmeraldActive,
+                    tint = if (isCharging) palette.primary else MetallicSilver,
                     modifier = Modifier.size(16.dp)
                 )
                 Spacer(modifier = Modifier.width(4.dp))
                 Text(
-                    text = "$batteryPct%${if (isCharging) " (CHG)" else ""}",
+                    text = "$batteryPct%",
                     color = PureWhite,
                     fontSize = 11.sp,
                     fontFamily = FontFamily.Monospace
                 )
             }
 
+            // Return to ASTRA Assistant button
+            AdminActionButton(
+                text = "Back to Assistant",
+                onClick = onExitClick,
+                icon = Icons.AutoMirrored.Filled.ArrowBack,
+                testTag = "header_exit_to_assistant_btn"
+            )
+
+            // Lock Panel Button
             AdminActionButton(
                 text = "Lock",
                 onClick = onLockClick,
@@ -315,6 +347,7 @@ private fun TopAdminHeader(
 private fun SidebarContent(
     currentDestination: AdminNavDestination,
     onSelectDestination: (AdminNavDestination) -> Unit,
+    onExitToAssistant: () -> Unit,
     compact: Boolean,
     modifier: Modifier = Modifier
 ) {
@@ -331,7 +364,7 @@ private fun SidebarContent(
         if (!compact) {
             Column(modifier = Modifier.padding(bottom = 16.dp, start = 8.dp, top = 8.dp)) {
                 Text(
-                    text = "ASTRA NEXUS",
+                    text = "ASTRA AI",
                     color = PureWhite,
                     fontSize = 18.sp,
                     fontFamily = FontFamily.Monospace,
@@ -410,6 +443,38 @@ private fun SidebarContent(
                         )
                     }
                 }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        // Return to ASTRA Assistant footer button
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(8.dp))
+                .background(palette.primary.copy(alpha = 0.15f))
+                .border(BorderStroke(1.dp, palette.primary), RoundedCornerShape(8.dp))
+                .clickable(onClick = onExitToAssistant)
+                .padding(horizontal = 12.dp, vertical = 10.dp)
+                .testTag("sidebar_exit_to_assistant_button"),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = Icons.AutoMirrored.Filled.ExitToApp,
+                contentDescription = "Exit to Assistant",
+                tint = palette.primary,
+                modifier = Modifier.size(20.dp)
+            )
+            if (!compact) {
+                Spacer(modifier = Modifier.width(12.dp))
+                Text(
+                    text = "EXIT TO ASSISTANT",
+                    color = palette.primaryLight,
+                    fontSize = 12.sp,
+                    fontFamily = FontFamily.Monospace,
+                    fontWeight = FontWeight.Bold
+                )
             }
         }
     }

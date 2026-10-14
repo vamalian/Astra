@@ -138,14 +138,14 @@ fun SecuritySettingsScreen(
                         Spacer(modifier = Modifier.width(10.dp))
                         Column {
                             Text(
-                                text = "DEFAULT SETUP PIN (600) ACTIVE",
+                                text = "DEFAULT SETUP PIN ACTIVE",
                                 color = AmberAlert,
                                 fontSize = 13.sp,
                                 fontFamily = FontFamily.Monospace,
                                 fontWeight = FontWeight.Bold
                             )
                             Text(
-                                text = "The initial setup PIN (600) is intended only for first boot. Please change this below to safeguard system settings.",
+                                text = "The initial setup PIN is active. Please update your administrative PIN below to protect sensitive system parameters.",
                                 color = MetallicSilver,
                                 fontSize = 11.sp,
                                 fontFamily = FontFamily.Monospace

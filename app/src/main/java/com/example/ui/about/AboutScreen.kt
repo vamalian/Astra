@@ -67,7 +67,7 @@ fun AboutScreen(
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = "ASTRA NEXUS",
+                            text = "ASTRA AI",
                             color = PureWhite,
                             fontSize = 22.sp,
                             fontFamily = FontFamily.Monospace,
@@ -75,16 +75,16 @@ fun AboutScreen(
                             letterSpacing = 2.sp
                         )
                         Text(
-                            text = "ULTIMATE ADMIN PANEL // TABLET EDITION",
+                            text = "EXECUTIVE AI ASSISTANT & INTEGRATED ADMIN PANEL",
                             color = palette.primary,
-                            fontSize = 12.sp,
+                            fontSize = 11.sp,
                             fontFamily = FontFamily.Monospace,
                             fontWeight = FontWeight.SemiBold,
                             letterSpacing = 1.sp
                         )
                         Spacer(modifier = Modifier.height(10.dp))
                         Text(
-                            text = "A standalone, high-security command console built specifically for Android tablets to configure system parameters, inspect diagnostics, manage API tokens, and calibrate security protocols.",
+                            text = "An advanced JARVIS-inspired executive AI assistant with native voice synthesis, real-time Gemini AI integration, multi-ring animated Arc Reactor, and an integrated private administration console.",
                             color = MetallicSilver,
                             fontSize = 12.sp,
                             fontFamily = FontFamily.Monospace,

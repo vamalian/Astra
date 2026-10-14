@@ -8,10 +8,15 @@ import com.example.data.diagnostics.SystemDiagnosticsReport
 import com.example.data.model.AdminNavDestination
 import com.example.data.model.ApiConfiguration
 import com.example.data.model.AppearancePreferences
+import com.example.data.model.AppScreen
+import com.example.data.model.AstraChatMessage
 import com.example.data.model.InactivityTimeout
+import com.example.data.model.ReactorState
 import com.example.data.model.SecurityEvent
 import com.example.data.model.SystemOverviewData
+import com.example.data.model.WeatherTelemetry
 import com.example.data.pref.AdminPreferencesManager
+import com.example.data.voice.AstraVoiceManager
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -30,14 +35,40 @@ class AstraAdminViewModel(application: Application) : AndroidViewModel(applicati
 
     private val prefsManager = AdminPreferencesManager(application)
     private val diagnosticsManager = SystemDiagnosticsManager(application)
+    private val voiceManager = AstraVoiceManager(application, viewModelScope)
 
-    // Unlock Status
+    // Current Screen Root (Defaults to Main ASTRA AI Assistant screen!)
+    private val _currentAppScreen = MutableStateFlow(AppScreen.ASSISTANT)
+    val currentAppScreen: StateFlow<AppScreen> = _currentAppScreen.asStateFlow()
+
+    // Unlock Status for Admin Panel
     private val _isUnlocked = MutableStateFlow(false)
     val isUnlocked: StateFlow<Boolean> = _isUnlocked.asStateFlow()
 
-    // Navigation State
+    // Navigation State inside Admin Panel
     private val _currentDestination = MutableStateFlow(AdminNavDestination.DASHBOARD)
     val currentDestination: StateFlow<AdminNavDestination> = _currentDestination.asStateFlow()
+
+    // Voice & Arc Reactor Telemetry
+    val reactorState: StateFlow<ReactorState> = voiceManager.reactorState
+    val audioRms: StateFlow<Float> = voiceManager.audioRms
+    val isListening: StateFlow<Boolean> = voiceManager.isListening
+    val isSpeaking: StateFlow<Boolean> = voiceManager.isSpeaking
+
+    // Chat Conversation with ASTRA AI
+    private val _chatMessages = MutableStateFlow<List<AstraChatMessage>>(
+        listOf(
+            AstraChatMessage(
+                text = "ASTRA online and standing by, sir. All core subsystems nominal. Voice and neural gateways ready. How may I assist you today?",
+                isUser = false
+            )
+        )
+    )
+    val chatMessages: StateFlow<List<AstraChatMessage>> = _chatMessages.asStateFlow()
+
+    // Weather Subsystem Telemetry
+    private val _weatherTelemetry = MutableStateFlow(WeatherTelemetry())
+    val weatherTelemetry: StateFlow<WeatherTelemetry> = _weatherTelemetry.asStateFlow()
 
     // Preferences Delegations
     val autoLockEnabled: StateFlow<Boolean> = prefsManager.autoLockEnabled
@@ -95,6 +126,10 @@ class AstraAdminViewModel(application: Application) : AndroidViewModel(applicati
     init {
         startInactivityMonitor()
         startTimeTicker()
+
+        voiceManager.onTranscriptionResult = { recognizedText ->
+            submitAssistantQuery(recognizedText)
+        }
     }
 
     private fun formatCurrentTime(): String {
@@ -115,7 +150,7 @@ class AstraAdminViewModel(application: Application) : AndroidViewModel(applicati
         inactivityCheckJob?.cancel()
         inactivityCheckJob = viewModelScope.launch {
             while (isActive) {
-                delay(5000) // check every 5 seconds
+                delay(5000)
                 if (_isUnlocked.value && autoLockEnabled.value) {
                     val timeoutMinutes = inactivityTimeout.value.minutes
                     if (timeoutMinutes > 0) {
@@ -134,17 +169,33 @@ class AstraAdminViewModel(application: Application) : AndroidViewModel(applicati
         lastInteractionTimeMillis = System.currentTimeMillis()
     }
 
+    // App Screen Navigation
+    fun openAdminPinGate() {
+        onUserInteraction()
+        voiceManager.stopSpeaking()
+        voiceManager.stopListening()
+        _currentAppScreen.value = AppScreen.ADMIN_PIN
+    }
+
+    fun returnToAssistant() {
+        onUserInteraction()
+        _currentAppScreen.value = AppScreen.ASSISTANT
+    }
+
+    // PIN Authentication
     fun verifyPin(enteredPin: String): Boolean {
         onUserInteraction()
         val success = prefsManager.verifyPin(enteredPin)
         if (success) {
             _isUnlocked.value = true
+            _currentAppScreen.value = AppScreen.ADMIN_PANEL
         }
         return success
     }
 
     fun lockConsole(reason: String = "Manual lock by administrator.") {
         _isUnlocked.value = false
+        _currentAppScreen.value = AppScreen.ASSISTANT
         prefsManager.addSecurityEvent(
             type = "CONSOLE_LOCKED",
             description = reason,
@@ -170,6 +221,54 @@ class AstraAdminViewModel(application: Application) : AndroidViewModel(applicati
         }
     }
 
+    // Voice & AI Interaction
+    fun toggleVoiceInput() {
+        onUserInteraction()
+        if (voiceManager.isListening.value) {
+            voiceManager.stopListening()
+        } else {
+            voiceManager.startListening()
+        }
+    }
+
+    fun stopVoiceInput() {
+        voiceManager.stopListening()
+    }
+
+    fun stopSpeaking() {
+        voiceManager.stopSpeaking()
+    }
+
+    fun submitAssistantQuery(query: String) {
+        if (query.isBlank()) return
+        onUserInteraction()
+
+        // Append user query to chat history
+        val userMsg = AstraChatMessage(text = query.trim(), isUser = true)
+        _chatMessages.value = _chatMessages.value + userMsg
+
+        viewModelScope.launch {
+            val key = apiConfig.value.apiKey
+            val answer = voiceManager.queryGemini(query, key)
+
+            val astraMsg = AstraChatMessage(text = answer, isUser = false)
+            _chatMessages.value = _chatMessages.value + astraMsg
+
+            // Vocalize through male TextToSpeech
+            voiceManager.speak(answer)
+        }
+    }
+
+    fun clearChatHistory() {
+        _chatMessages.value = listOf(
+            AstraChatMessage(
+                text = "Command history cleared, sir. Subsystems standing by.",
+                isUser = false
+            )
+        )
+    }
+
+    // Preferences Actions
     fun setAutoLockEnabled(enabled: Boolean) {
         onUserInteraction()
         prefsManager.setAutoLockEnabled(enabled)
@@ -214,6 +313,7 @@ class AstraAdminViewModel(application: Application) : AndroidViewModel(applicati
         onUserInteraction()
         prefsManager.factoryReset()
         _isUnlocked.value = false
+        _currentAppScreen.value = AppScreen.ASSISTANT
         _currentDestination.value = AdminNavDestination.DASHBOARD
     }
 
@@ -258,5 +358,10 @@ class AstraAdminViewModel(application: Application) : AndroidViewModel(applicati
             )
             prefsManager.updateApiConfig(updatedConfig)
         }
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        voiceManager.destroy()
     }
 }

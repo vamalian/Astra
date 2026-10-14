@@ -1,5 +1,6 @@
 package com.example.ui.login
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -19,13 +20,14 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -35,42 +37,64 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.model.ReactorState
 import com.example.ui.components.AdminGlassCard
-import com.example.ui.components.AdminStatusBadge
 import com.example.ui.components.ArcReactor
+import com.example.ui.components.HudButton
 import com.example.ui.components.PinKeypad
-import com.example.ui.theme.AmberAlert
 import com.example.ui.theme.LocalNexusPalette
-import com.example.ui.theme.MetallicSilver
 import com.example.ui.theme.PureWhite
 import com.example.ui.theme.RedAlert
+import kotlinx.coroutines.delay
 
 @Composable
 fun AdminLoginScreen(
     onUnlockSuccessful: () -> Unit,
+    onBackToAssistant: () -> Unit,
     verifyPin: (String) -> Boolean,
-    isDefaultPinActive: Boolean,
     modifier: Modifier = Modifier
 ) {
+    BackHandler {
+        onBackToAssistant()
+    }
+
     val palette = LocalNexusPalette.current
     var enteredPin by remember { mutableStateOf("") }
     var errorMessage by remember { mutableStateOf<String?>(null) }
-    var failedAttempts by remember { mutableStateOf(0) }
+    var failedAttempts by remember { mutableIntStateOf(0) }
+    var lockoutSecondsRemaining by remember { mutableIntStateOf(0) }
+
+    LaunchedEffect(lockoutSecondsRemaining) {
+        if (lockoutSecondsRemaining > 0) {
+            delay(1000)
+            lockoutSecondsRemaining--
+            if (lockoutSecondsRemaining == 0) {
+                errorMessage = null
+            }
+        }
+    }
 
     fun submitPin() {
+        if (lockoutSecondsRemaining > 0) return
         if (enteredPin.isEmpty()) return
+
         val valid = verifyPin(enteredPin)
         if (valid) {
             errorMessage = null
+            failedAttempts = 0
+            enteredPin = ""
             onUnlockSuccessful()
         } else {
             failedAttempts++
-            errorMessage = "AUTHENTICATION DENIED // INVALID PIN ($failedAttempts)"
             enteredPin = ""
+            if (failedAttempts >= 5) {
+                lockoutSecondsRemaining = 30
+                errorMessage = "LOCKOUT ACTIVE // TOO MANY ATTEMPTS: Please wait 30s"
+            } else {
+                errorMessage = "Incorrect PIN // Attempt $failedAttempts of 5"
+            }
         }
     }
 
@@ -83,22 +107,22 @@ fun AdminLoginScreen(
     ) {
         Column(
             modifier = Modifier
-                .widthIn(max = 580.dp)
+                .widthIn(max = 560.dp)
                 .padding(24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
-            // Header Logo & Reactor
+            // ARC Reactor Status
             ArcReactor(
-                state = if (errorMessage != null) ReactorState.SECURITY_ALERT else ReactorState.IDLE,
+                state = if (errorMessage != null || lockoutSecondsRemaining > 0) ReactorState.SECURITY_ALERT else ReactorState.IDLE,
                 reactorSize = 130.dp,
-                customStatusText = "SECURITY GATEWAY // LOCKED"
+                customStatusText = if (lockoutSecondsRemaining > 0) "SECURITY LOCKOUT // $lockoutSecondsRemaining SECONDS" else "ADMIN SECURITY // AUTHENTICATION REQUIRED"
             )
 
             Spacer(modifier = Modifier.height(16.dp))
 
             Text(
-                text = "ASTRA NEXUS",
+                text = "ASTRA AI",
                 color = PureWhite,
                 fontSize = 24.sp,
                 fontFamily = FontFamily.Monospace,
@@ -107,7 +131,7 @@ fun AdminLoginScreen(
             )
 
             Text(
-                text = "COMMAND ADMIN CONSOLE",
+                text = "ADMINISTRATIVE CONTROL GATEWAY",
                 color = palette.primary,
                 fontSize = 12.sp,
                 fontFamily = FontFamily.Monospace,
@@ -115,36 +139,6 @@ fun AdminLoginScreen(
             )
 
             Spacer(modifier = Modifier.height(16.dp))
-
-            // Initial Setup PIN Notice
-            if (isDefaultPinActive) {
-                AdminGlassCard(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(bottom = 12.dp),
-                    borderColor = AmberAlert.copy(alpha = 0.5f),
-                    contentPadding = 10.dp
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Info,
-                            contentDescription = null,
-                            tint = AmberAlert,
-                            modifier = Modifier.size(18.dp)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = "INITIAL SETUP ACTIVE: Default PIN is 600. Please change this in Security Settings to protect sensitive administration parameters.",
-                            color = AmberAlert,
-                            fontSize = 11.sp,
-                            fontFamily = FontFamily.Monospace,
-                            lineHeight = 15.sp
-                        )
-                    }
-                }
-            }
 
             // Error notice
             AnimatedVisibility(visible = errorMessage != null) {
@@ -155,7 +149,11 @@ fun AdminLoginScreen(
                     borderColor = RedAlert,
                     contentPadding = 10.dp
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
+                    ) {
                         Icon(
                             imageVector = Icons.Default.Warning,
                             contentDescription = null,
@@ -166,7 +164,7 @@ fun AdminLoginScreen(
                         Text(
                             text = errorMessage ?: "",
                             color = RedAlert,
-                            fontSize = 11.sp,
+                            fontSize = 12.sp,
                             fontFamily = FontFamily.Monospace,
                             fontWeight = FontWeight.Bold
                         )
@@ -174,7 +172,7 @@ fun AdminLoginScreen(
                 }
             }
 
-            // Masked PIN display circles
+            // Masked PIN display circles (NEVER shows numbers, only masked dots)
             Row(
                 modifier = Modifier
                     .padding(vertical = 12.dp)
@@ -206,23 +204,36 @@ fun AdminLoginScreen(
             // Numeric PIN Keypad
             PinKeypad(
                 onDigitClick = { digit ->
-                    if (enteredPin.length < 8) {
+                    if (lockoutSecondsRemaining == 0 && enteredPin.length < 8) {
                         enteredPin += digit
                         errorMessage = null
                     }
                 },
                 onBackspaceClick = {
-                    if (enteredPin.isNotEmpty()) {
+                    if (lockoutSecondsRemaining == 0 && enteredPin.isNotEmpty()) {
                         enteredPin = enteredPin.dropLast(1)
                         errorMessage = null
                     }
                 },
                 onClearClick = {
-                    enteredPin = ""
-                    errorMessage = null
+                    if (lockoutSecondsRemaining == 0) {
+                        enteredPin = ""
+                        errorMessage = null
+                    }
                 },
                 onSubmitClick = { submitPin() },
-                submitEnabled = enteredPin.isNotEmpty()
+                submitEnabled = lockoutSecondsRemaining == 0 && enteredPin.isNotEmpty()
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Return to ASTRA button
+            HudButton(
+                text = "RETURN TO ASTRA ASSISTANT",
+                icon = Icons.AutoMirrored.Filled.ArrowBack,
+                onClick = onBackToAssistant,
+                modifier = Modifier.fillMaxWidth(0.85f),
+                testTag = "return_to_assistant_button"
             )
         }
     }
